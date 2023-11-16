@@ -50,37 +50,71 @@ DWORD WINAPI PhilosopherRoutine(void* param) {
     return 0;
 }
 
+const char* StateNames[] = { "Idle", "Think", "Eat", "Die" };
 void UpdateUIForPhilosopher(HWND hWnd, int philosopherID, TPhilosopher* philosopher) {
     if (philosopher) {
-        int state = philosopher->GetState();
-        int force = philosopher->GetForce();
-        int wisdom = philosopher->GetWisdom();
-
-        // Assuming you have defined your control IDs
-        int stateControlID = IDC_STATE1 + philosopherID;
-        int forceControlID = IDC_FORCE1 + philosopherID;
-        int wisdomControlID = IDC_WISDOM1 + philosopherID;
-
-        // Update UI elements based on philosopher's state
-        SetDlgItemInt(hWnd, stateControlID, state, TRUE);
-        SetDlgItemInt(hWnd, forceControlID, force, TRUE);
-
-        // Convert int to string for SetDlgItemText
-        std::string wisdomStr = std::to_string(wisdom);
-        SetDlgItemText(hWnd, wisdomControlID, wisdomStr.c_str());
+        const char* stateName = StateNames[philosopher->GetState()];
+        switch (philosopherID) {
+        case 0:
+            SetDlgItemText(hWnd, IDC_STATE1, stateName);
+            SetDlgItemInt(hWnd, IDC_FORCE1, philosopher->GetForce(), TRUE);
+            SetDlgItemText(hWnd, IDC_WISDOM1, std::to_string(philosopher->GetWisdom()).c_str());
+            break;
+        case 1:
+            SetDlgItemText(hWnd, IDC_STATE2, stateName);
+            SetDlgItemInt(hWnd, IDC_FORCE2, philosopher->GetForce(), TRUE);
+            SetDlgItemText(hWnd, IDC_WISDOM2, std::to_string(philosopher->GetWisdom()).c_str());
+            break;
+        case 2:
+            SetDlgItemText(hWnd, IDC_STATE3, stateName);
+            SetDlgItemInt(hWnd, IDC_FORCE3, philosopher->GetForce(), TRUE);
+            SetDlgItemText(hWnd, IDC_WISDOM3, std::to_string(philosopher->GetWisdom()).c_str());
+            break;
+        case 3:
+            SetDlgItemText(hWnd, IDC_STATE4, stateName);
+            SetDlgItemInt(hWnd, IDC_FORCE4, philosopher->GetForce(), TRUE);
+            SetDlgItemText(hWnd, IDC_WISDOM4, std::to_string(philosopher->GetWisdom()).c_str());
+            break;
+        case 4:
+            SetDlgItemText(hWnd, IDC_STATE5, stateName);
+            SetDlgItemInt(hWnd, IDC_FORCE5, philosopher->GetForce(), TRUE);
+            SetDlgItemText(hWnd, IDC_WISDOM5, std::to_string(philosopher->GetWisdom()).c_str());
+            break;
+        }
     }
     else {
         // Clear UI elements related to the philosopher with ID
-        // SetDlgItemText to set the text to ""
-        int stateControlID = IDC_STATE1 + philosopherID;
-        int forceControlID = IDC_FORCE1 + philosopherID;
-        int wisdomControlID = IDC_WISDOM1 + philosopherID;
-
-        SetDlgItemText(hWnd, stateControlID, "");
-        SetDlgItemText(hWnd, forceControlID, "");
-        SetDlgItemText(hWnd, wisdomControlID, "");
+        switch (philosopherID) {
+        case 0:
+            SetDlgItemText(hWnd, IDC_STATE1, "");
+            SetDlgItemText(hWnd, IDC_FORCE1, "");
+            SetDlgItemText(hWnd, IDC_WISDOM1, "");
+            break;
+        case 1:
+            SetDlgItemText(hWnd, IDC_STATE2, "");
+            SetDlgItemText(hWnd, IDC_FORCE2, "");
+            SetDlgItemText(hWnd, IDC_WISDOM2, "");
+            break;
+        case 2:
+            SetDlgItemText(hWnd, IDC_STATE3, "");
+            SetDlgItemText(hWnd, IDC_FORCE3, "");
+            SetDlgItemText(hWnd, IDC_WISDOM3, "");
+            break;
+        case 3:
+            SetDlgItemText(hWnd, IDC_STATE4, "");
+            SetDlgItemText(hWnd, IDC_FORCE4, "");
+            SetDlgItemText(hWnd, IDC_WISDOM4, "");
+            break;
+        case 4:
+            SetDlgItemText(hWnd, IDC_STATE5, "");
+            SetDlgItemText(hWnd, IDC_FORCE5, "");
+            SetDlgItemText(hWnd, IDC_WISDOM5, "");
+            break;
+        }
     }
 }
+
+
 
 // Ziņojumu apstrādātāja prototips
 BOOL CALLBACK MainWndProc(HWND, UINT, WPARAM, LPARAM);
@@ -127,6 +161,9 @@ BOOL CALLBACK MainWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
             EnableWindow(GetDlgItem(hWnd, IDC_START), TRUE);
             EnableWindow(GetDlgItem(hWnd, IDC_STOP), FALSE);
             return TRUE;
+        case IDC_EXIT:
+            SendMessage(hWnd, WM_CLOSE, 0, 0);
+            return TRUE;
         }
         return FALSE;
 
@@ -136,7 +173,7 @@ BOOL CALLBACK MainWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
         id = static_cast<int>(wParam);
         philosopher = reinterpret_cast<TPhilosopher*>(lParam);
 
-        UpdateUIForPhilosopher(hWnd, id, philosopher);
+        if (Philosophers[id] == philosopher) UpdateUIForPhilosopher(hWnd, id, philosopher);
         return TRUE;
 
     case WM_DESTROY: // ja tas ir pabeigšanas pieprasījums
@@ -148,24 +185,13 @@ BOOL CALLBACK MainWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
 }
 
 /*
-I have C++ WINAPI Code:
+This is a C++ WINAPI program that solves the dining philosophers problem.
 
-And resource:
+resource.h contains:
 Dialog IDD_MAINDIALOG, Button IDC_START, Button IDC_STOP, Button IDC_EXIT, Static Text IDC_WISDOM1, Static Text IDC_WISDOM2, Static Text IDC_WISDOM3, Static Text IDC_WISDOM4, Static Text IDC_WISDOM5, Static Text IDC_FORCE1, Static Text IDC_FORCE2, Static Text IDC_FORCE3, Static Text IDC_FORCE4, Static Text IDC_FORCE5, Static Text IDC_STATE1, Static Text IDC_STATE2, Static Text IDC_STATE3, Static Text IDC_STATE4, Static Text IDC_STATE5
 */
 
 /*
-Task: Write a program that solves the dining philosophers problem. It is required to 1) keep track of the 5 philosopher's life state and 2) solve the cross-exclusions, which may occur during the use of forks and plates, using semaphores.
-
-Description of the problem: Five philosophers live in one house. Their lives are spent in thought, interrupted by meals. A starving philosopher enters the dining room, sits down at the round table, picks up two forks and starts to eat. On the table are five plates and five forks between them. The philosopher can only pick up the two nearest forks. When the philosopher has finished his meal, he puts down his forks, leaves the dining room and continues thought.
-As such, there are 5 philosophers dynamic objects TPhilosopher*, a thread for each. They have 4 states - Think, Eat, Idle, Die. There are 5 plates and 5 forks. A philosopher needs 1 plate and 2 nearby forks. 2 philosophers are prohibitted from using the same forks or plates. After eating, a philosopher returns them and continues thinking. If a philosopher goes too long without eating, he dies.
-
-Problem solving algorithm: During problem solving, the possibility of using one fork with two philosophers at the same time must be excluded. I.e. a critical section needs to be made for each fork. Each philosopher has to take a fork before starting the meal two forks i.e. two critical sections must be built. Then the problem will be solved, but the possibility arises to block the work of the program (cross-locking). If all the philosophers enter the dining room at the same time and each takes one fork at a time, no one will be able to take the second fork and everyone will starve to death. This must be avoided
-Do not allow all 5 philosophers into the dining room at the same time to avoid cross-locking. Use a queue.
-The critical section of the fork can be implemented using a mutex semaphore. It's default value must be 4 to limit the number of philosophers who can enter the dining room at the same time.
-
-Semaphore: use CreateSemaphore function to create a mutex semaphore, WaitForSingleObject and ReleaseSemaphore
-
 TPhilosopher class is already created. Use it.
 Create 5 TPhilosopher dynamic objects. A new thread for each. They have 4 states - Think(), Eat(), Idle(), Die(). They each have force, windom and voracity.
 Immediately after the philosopher is created, a thread starts working inside the object, which changes the philosopher's life force and wisdom 10 times a second depending on its state and voracity. When philosopher's force reaches zero, the philosopher will die. The philosopher's states can be changed by the methods Eat() (transforms to Eat), Think() (transforms to Think) and Kill() (transforms to Die)
@@ -403,6 +429,17 @@ while (Philosopher->GetState() != psDie) {
 // call methods
 }
 delete Philosopher.
+
+Task: Write a program that solves the dining philosophers problem. It is required to 1) keep track of the 5 philosopher's life state and 2) solve the cross-exclusions, which may occur during the use of forks and plates, using semaphores.
+
+Description of the problem: Five philosophers live in one house. Their lives are spent in thought, interrupted by meals. A starving philosopher enters the dining room, sits down at the round table, picks up two forks and starts to eat. On the table are five plates and five forks between them. The philosopher can only pick up the two nearest forks. When the philosopher has finished his meal, he puts down his forks, leaves the dining room and continues thought.
+As such, there are 5 philosophers dynamic objects TPhilosopher*, a thread for each. They have 4 states - Think, Eat, Idle, Die. There are 5 plates and 5 forks. A philosopher needs 1 plate and 2 nearby forks. 2 philosophers are prohibitted from using the same forks or plates. After eating, a philosopher returns them and continues thinking. If a philosopher goes too long without eating, he dies.
+
+Problem solving algorithm: During problem solving, the possibility of using one fork with two philosophers at the same time must be excluded. I.e. a critical section needs to be made for each fork. Each philosopher has to take a fork before starting the meal two forks i.e. two critical sections must be built. Then the problem will be solved, but the possibility arises to block the work of the program (cross-locking). If all the philosophers enter the dining room at the same time and each takes one fork at a time, no one will be able to take the second fork and everyone will starve to death. This must be avoided
+Do not allow all 5 philosophers into the dining room at the same time to avoid cross-locking. Use a queue.
+The critical section of the fork can be implemented using a mutex semaphore. It's default value must be 4 to limit the number of philosophers who can enter the dining room at the same time.
+
+Semaphore: use CreateSemaphore function to create a mutex semaphore, WaitForSingleObject and ReleaseSemaphore
 
 The structure of the program:
 In the program, for each of the five philosophers, create an object of the philosopher class and a thread that describes the philosopher's routine. The philosopher's methods Eat (for the philosopher to eat) and Think (for the philosopher to think) must be called sequentially in the thread (one after another). In addition, it is necessary to exclude the possibility of simultaneous use of forks and to exclude the possibility of mutual blocking. To be able to display the states of the philosophers on the window, the philosopher object will send a WM_PHOLOSOPHER message to the main window with the id number of the philosopher (wParam) and the address of the philosopher object (lParam) whenever its state changes. The main form should update the specified philosopher on the screen in response to these notifications - IDC_WISDOM1/2/3/4/5, IDC_STATE1/2/3/4/5, IDC_FORCE1/2/3/4/5

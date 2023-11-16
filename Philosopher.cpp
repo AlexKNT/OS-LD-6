@@ -22,6 +22,7 @@ DWORD WINAPI _PhilosopherThread(void* P);
 static void Stop(const char * Msg) {
   for (int i = 0; i < MAX_PHILOSOPHERS; i++) if (Philosophers[i]) Philosophers[i]->Kill();
   MessageBox(NULL, Msg, "Problem is not solved", MB_OK | MB_ICONERROR);
+  for (int i = 0; i < MAX_PHILOSOPHERS; i++) if (Philosophers[i]) WaitForSingleObject(Philosophers[i]->GetLifeHandle(), INFINITE);
   TerminateProcess(GetCurrentProcess(), 1);
 }
 
