@@ -2,7 +2,86 @@
 #include <windows.h>
 #include <stdio.h>
 #include "resource.h"
+#include "Philosopher.h"
 #pragma warning(disable : 4996)
+
+constexpr int MAX_PHILOSOPHERS = 5;
+TPhilosopher* Philosophers[MAX_PHILOSOPHERS] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+HANDLE Forks[MAX_PHILOSOPHERS];
+HANDLE DiningRoomSemaphore;
+
+void InitGlobals() {
+    for (int i = 0; i < MAX_PHILOSOPHERS; ++i) {
+        Philosophers[i] = nullptr;
+        Forks[i] = CreateSemaphore(NULL, 1, 1, NULL);
+    }
+    DiningRoomSemaphore = CreateSemaphore(NULL, MAX_PHILOSOPHERS - 1, MAX_PHILOSOPHERS - 1, NULL);
+}
+
+void CleanUpGlobals() {
+    for (int i = 0; i < MAX_PHILOSOPHERS; ++i) {
+        if (Philosophers[i]) {
+            delete Philosophers[i];
+            Philosophers[i] = nullptr;
+        }
+        CloseHandle(Forks[i]);
+    }
+    CloseHandle(DiningRoomSemaphore);
+}
+
+DWORD WINAPI PhilosopherRoutine(void* param) {
+    int id = reinterpret_cast<int>(param);
+    TPhilosopher* philosopher = Philosophers[id];
+
+    while (philosopher->GetState() != psDie) {
+        philosopher->Think();
+
+        WaitForSingleObject(DiningRoomSemaphore, INFINITE);
+        WaitForSingleObject(Forks[id], INFINITE);
+        WaitForSingleObject(Forks[(id + 1) % MAX_PHILOSOPHERS], INFINITE);
+
+        philosopher->Eat();
+
+        ReleaseSemaphore(Forks[(id + 1) % MAX_PHILOSOPHERS], 1, NULL);
+        ReleaseSemaphore(Forks[id], 1, NULL);
+        ReleaseSemaphore(DiningRoomSemaphore, 1, NULL);
+    }
+
+    return 0;
+}
+
+void UpdateUIForPhilosopher(HWND hWnd, int philosopherID, TPhilosopher* philosopher) {
+    if (philosopher) {
+        int state = philosopher->GetState();
+        int force = philosopher->GetForce();
+        int wisdom = philosopher->GetWisdom();
+
+        // Assuming you have defined your control IDs
+        int stateControlID = IDC_STATE1 + philosopherID;
+        int forceControlID = IDC_FORCE1 + philosopherID;
+        int wisdomControlID = IDC_WISDOM1 + philosopherID;
+
+        // Update UI elements based on philosopher's state
+        SetDlgItemInt(hWnd, stateControlID, state, TRUE);
+        SetDlgItemInt(hWnd, forceControlID, force, TRUE);
+
+        // Convert int to string for SetDlgItemText
+        std::string wisdomStr = std::to_string(wisdom);
+        SetDlgItemText(hWnd, wisdomControlID, wisdomStr.c_str());
+    }
+    else {
+        // Clear UI elements related to the philosopher with ID
+        // SetDlgItemText to set the text to ""
+        int stateControlID = IDC_STATE1 + philosopherID;
+        int forceControlID = IDC_FORCE1 + philosopherID;
+        int wisdomControlID = IDC_WISDOM1 + philosopherID;
+
+        SetDlgItemText(hWnd, stateControlID, "");
+        SetDlgItemText(hWnd, forceControlID, "");
+        SetDlgItemText(hWnd, wisdomControlID, "");
+    }
+}
+
 // Ziņojumu apstrādātāja prototips
 BOOL CALLBACK MainWndProc(HWND, UINT, WPARAM, LPARAM);
 // Galvenā funkcija
@@ -21,15 +100,47 @@ BOOL CALLBACK MainWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
     switch (Msg) { // pārbaudīt ziņojuma identifikatoru
     case WM_INITDIALOG: // ja tas ir inicializācijas paziņojums
         // izpildīt inicializācijas darbības
+        InitGlobals();
         return TRUE;
     case WM_COMMAND: // ja tas ir paziņojums no vadības elementa
         switch (LOWORD(wParam)) { // pārbaudīt vadības elementa ID
         case IDOK: // ja bija uzspiesta OK poga
             DestroyWindow(hWnd); // aizvērt logu
             return TRUE;
+        case IDC_START:
+            for (int i = 0; i < MAX_PHILOSOPHERS; ++i) {
+                Philosophers[i] = new TPhilosopher;
+                CreateThread(NULL, 0, PhilosopherRoutine, reinterpret_cast<void*>(i), 0, NULL);
+            }
+            EnableWindow(GetDlgItem(hWnd, IDC_START), FALSE);
+            EnableWindow(GetDlgItem(hWnd, IDC_STOP), TRUE);
+            return TRUE;
+        case IDC_STOP:
+            for (int i = 0; i < MAX_PHILOSOPHERS; ++i) {
+                if (Philosophers[i]) {
+                    Philosophers[i]->Kill();
+                    WaitForSingleObject(Philosophers[i]->GetLifeHandle(), INFINITE);
+                    delete Philosophers[i];
+                    Philosophers[i] = nullptr;
+                }
+            }
+            EnableWindow(GetDlgItem(hWnd, IDC_START), TRUE);
+            EnableWindow(GetDlgItem(hWnd, IDC_STOP), FALSE);
+            return TRUE;
         }
         return FALSE;
+
+    int id;
+    TPhilosopher* philosopher;
+    case WM_PHILOSOPHER:
+        id = static_cast<int>(wParam);
+        philosopher = reinterpret_cast<TPhilosopher*>(lParam);
+
+        UpdateUIForPhilosopher(hWnd, id, philosopher);
+        return TRUE;
+
     case WM_DESTROY: // ja tas ir pabeigšanas pieprasījums
+        CleanUpGlobals();
         PostQuitMessage(0); // pabeigt programmu
         return TRUE;
     }
@@ -105,6 +216,7 @@ class TPhilosopher {
     int  GetWisdom();
     int  GetVoracity();
     bool SetVoracity(int AVoracity);
+    HANDLE GetLifeHandle() const { return FLife; }
 };
 
 

@@ -34,6 +34,7 @@ class TPhilosopher {
     int  GetWisdom();
 	int  GetVoracity();
 	bool SetVoracity(int AVoracity);
+    HANDLE GetLifeHandle() const { return FLife; }
 };
 
 
