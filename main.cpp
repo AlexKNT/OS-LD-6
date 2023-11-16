@@ -314,14 +314,33 @@ g) Put down the left fork (release the fork semaphore with id number);
 h) Leave the dining room (release the dining room semaphore).
 
 Task: Implement WM_INITDIALOG message
+1) Create binary semaphores (mutex) for forks;
+2) Create a semaphore for the dining room;
+3) Initialize the global philosophers array with NULLs
 
 Task: Implement WM_DESTROY message
+1) For each philosopher object in the global array:
+a) Kill it;
+b) Delete the object;
+2) Close all fork semaphore handles
+3) Close dining room semaphore handle
 
 Task: Implement switch (LOWORD(wParam)) IDC_START case
+1) Create 5 dynamic philosopher objects and write pointers to them to the global array
+2) Launch a thread for each philosopher, specifying their ID as a param and close the thread's handle
+Should only be available when the simulation is not running. Use EnableWindow for this.
 
 Task: Implement switch (LOWORD(wParam)) IDC_STOP case
+1) For each philosopher in the array,
+a) Kill it;
+b) Allow the associated thread to complete workl
+c) Delete the philosopher object and write NULL to their array position
+Should only be available when the simulation is running. Use EnableWindow for this.
 
 Task: Implement WM_PHILOSOPHER message
+1) Get the ID number of the philosopher who sent the message (the number of the philosopher will be sent via wParam).
+2) If the philosopher object exists (the pointer in the array is not equal to NULL), read the philosopher's state, force and wisdom from it and output them to the respective fields on the screen (IDC_STATE1/2/3/4/5, IDC_FORCE1/2/3/4/5, IDC_WISDOM1/2/3/4/5)
+3) If the philosopher object does not exist (the pointer in the array is equal to NULL), clear the relevant fields on the screen. Set them to "". (IDC_STATE1/2/3/4/5, IDC_FORCE1/2/3/4/5, IDC_WISDOM1/2/3/4/5)
 
 Use the following WINAPI functions:
 CreateSemaphore
@@ -330,4 +349,6 @@ CreateMutex
 ReleaseMutex
 WaitForSingleObject
 WaitForMultipleObjects
+
+Do not change Philosopher.cpp and .h
 */
