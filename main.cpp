@@ -59,15 +59,257 @@ TPhilosopher class is already created. Use it.
 Create 5 TPhilosopher dynamic objects. A new thread for each. They have 4 states - Think(), Eat(), Idle(), Die(). They each have force, windom and voracity.
 Immediately after the philosopher is created, a thread starts working inside the object, which changes the philosopher's life force and wisdom 10 times a second depending on its state and voracity. When philosopher's force reaches zero, the philosopher will die. The philosopher's states can be changed by the methods Eat() (transforms to Eat), Think() (transforms to Think) and Kill() (transforms to Die)
 TPhilosopher has the following methods:
+void Think(); // After calling this method, the philosopher starts thinking and generating wisdom. The philosopher is in a thinking state for a random time interval (0.5s -1s). Blocks the thread. Death due to starvation overrides blocking.
+void Eat(); // The philosopher begins to eat and blocks the thread until the end of the meal. Philosopher is in a feeding state for a random time interval (0.5s – 1s)
+void Kill(); // Kill the philosopher
+int GetState(); // Find out the current state of the philosopher: psIdle, psThink, psEat, psDie.
+int GetForce(); 
+int GetWisdom(); 
+int GetVoracity(); 
+bool SetVoracity(); 
 
 TPhilosopher.h:
+#ifndef PhilosopherH
+#define PhilosopherH
+
+#undef UNICODE
+#include <Windows.h>
+#include <string>
+
+#define psIdle  0
+#define psThink 1
+#define psEat   2
+#define psDie   3
+
+#define WM_PHILOSOPHER WM_USER
+
+class TPhilosopher {
+  friend DWORD WINAPI _PhilosopherThread(void* P);
+  private:
+    int FForce, FWisdom, FState;
+    CRITICAL_SECTION CPhilosopher;
+    HANDLE FLife;
+    HANDLE FStop;
+    int FVoracity;
+    void SetState(int AState);
+  public:
+    TPhilosopher();
+    TPhilosopher(TPhilosopher& P);
+    ~TPhilosopher();
+
+    void Think();
+    void Eat();
+    void Kill();
+    int  GetState();
+    int  GetForce();
+    int  GetWisdom();
+    int  GetVoracity();
+    bool SetVoracity(int AVoracity);
+};
+
+
+#endif
 
 TPhilosopher.cpp:
+#pragma hdrstop
+
+#include <time.h>
+#include "Philosopher.h"
+
+#pragma package(smart_init)
+
+#define MAX_PHILOSOPHERS 5
+#define random(x) (rand() % x)
+
+#define INIT_FORCE  50
+#define THINK_TIME  ((500 + random(501)))
+#define EAT_TIME    ((500 + random(501)))
+#define IDLE_FORCE  -2
+#define THINK_FORCE -1
+#define EAT_FORCE    3
+
+static TPhilosopher * Philosophers[MAX_PHILOSOPHERS] = {NULL, NULL, NULL, NULL, NULL};
+
+DWORD WINAPI _PhilosopherThread(void* P);
+
+static void Stop(const char * Msg) {
+  for (int i = 0; i < MAX_PHILOSOPHERS; i++) if (Philosophers[i]) Philosophers[i]->Kill();
+  MessageBox(NULL, Msg, "Problem is not solved", MB_OK | MB_ICONERROR);
+  TerminateProcess(GetCurrentProcess(), 1);
+}
+
+TPhilosopher::TPhilosopher()
+{
+  srand((unsigned)time(NULL));
+  bool found = false;
+  for (int i = 0; i < MAX_PHILOSOPHERS; i++) if (!Philosophers[i]) {
+    found = true;
+    Philosophers[i] = this;
+    break;
+  }
+  if (!found) Stop("Population of the philosophers is overflowed");
+  FForce  = INIT_FORCE;
+  FWisdom = 0;
+  FState  = psIdle;
+  InitializeCriticalSection(&CPhilosopher);
+  FStop = CreateEvent(NULL, TRUE, FALSE, NULL);
+  FVoracity = 50;
+  FLife = CreateThread(NULL, 0, &_PhilosopherThread, (void*)this, 0, NULL);
+}
+
+TPhilosopher::TPhilosopher(TPhilosopher& P)
+{
+  throw std::string("Can't make a copy of philosopher");
+}
+
+TPhilosopher::~TPhilosopher()
+{
+    Kill();
+
+    Sleep(100);
+
+    WaitForSingleObject(FLife, INFINITE);
+    CloseHandle(FLife);
+
+    DeleteCriticalSection(&CPhilosopher);
+
+    for (int i = 0; i < MAX_PHILOSOPHERS; i++) if (Philosophers[i] == this) {
+        Philosophers[i] = NULL;
+        break;
+    }
+
+    CloseHandle(FStop);
+}
+
+DWORD WINAPI _PhilosopherThread(void* P)
+{
+    HWND wnd = FindWindow("#32770", NULL);
+    DWORD id = -1;
+    for (int i = 0; i < MAX_PHILOSOPHERS; i++) if (Philosophers[i] == P) { id = i; break; }
+    TPhilosopher* Philosopher = (TPhilosopher*)P;
+    bool die = false;
+    while (!die && WaitForSingleObject(Philosopher->FStop, 100) == WAIT_TIMEOUT) {
+        EnterCriticalSection(&Philosopher->CPhilosopher);
+        switch (Philosopher->FState) {
+        case psIdle: Philosopher->FForce += IDLE_FORCE; break;
+        case psThink: Philosopher->FForce += THINK_FORCE; Philosopher->FWisdom++; break;
+        case psEat: Philosopher->FForce += EAT_FORCE; break;
+        }
+        die = Philosopher->FState == psDie || Philosopher->FForce < 0;
+        LeaveCriticalSection(&Philosopher->CPhilosopher);
+        if (wnd) PostMessage(wnd, WM_PHILOSOPHER, id, (LPARAM)P);
+    }
+    Philosopher->Kill();
+    if (wnd) PostMessage(wnd, WM_PHILOSOPHER, id, (LPARAM)P);
+    return 0;
+}
+
+void TPhilosopher::Think()
+{
+  if (GetState() != psIdle) return;
+  SetState(psThink);
+  WaitForSingleObject(FStop, THINK_TIME * (100 - FVoracity) / 100);
+  SetState(psIdle);
+}
+
+void TPhilosopher::Eat()
+{
+  if (GetState() != psIdle) return;
+  SetState(psEat);
+  WaitForSingleObject(FStop, EAT_TIME * FVoracity / 100);
+  SetState(psIdle);
+}
+
+void TPhilosopher::SetState(int AState)
+{
+  int state = GetState();
+  if (state == psDie || state == AState) return;
+
+  if (AState == psEat) {
+    int cnt = 0;
+    for (int i = 0; i < MAX_PHILOSOPHERS; i++) if (Philosophers[i] && Philosophers[i]->GetState() == psEat) cnt++;
+    if (cnt >= 2) Stop("Two philosophers tried to use one fork at the same time");
+  }
+
+  EnterCriticalSection(&CPhilosopher);
+  FState = AState;
+  LeaveCriticalSection(&CPhilosopher);
+}
+
+int TPhilosopher::GetState()
+{
+  EnterCriticalSection(&CPhilosopher);
+  int state = FState;
+  LeaveCriticalSection(&CPhilosopher);
+  return state;
+}
+
+int TPhilosopher::GetForce()
+{
+  EnterCriticalSection(&CPhilosopher);
+  int force = FForce;
+  LeaveCriticalSection(&CPhilosopher);
+  return force;
+}
+
+int TPhilosopher::GetWisdom()
+{
+  EnterCriticalSection(&CPhilosopher);
+  int wisdom = FWisdom;
+  LeaveCriticalSection(&CPhilosopher);
+  return wisdom;
+}
+
+void TPhilosopher::Kill()
+{
+    SetEvent(FStop);
+    SetState(psDie);
+}
+
+int  TPhilosopher::GetVoracity()
+{
+    EnterCriticalSection(&CPhilosopher);
+    int voracity = FVoracity;
+    LeaveCriticalSection(&CPhilosopher);
+    return voracity;
+}
+
+bool TPhilosopher::SetVoracity(int AVoracity)
+{
+    if (AVoracity < 0 || AVoracity > 100) return false;
+    EnterCriticalSection(&CPhilosopher);
+    FVoracity = AVoracity;
+    LeaveCriticalSection(&CPhilosopher);
+    return true;
+}
+
+
 
 Use the following code template:
 TPhilosopher * Philosopher = new TPhilosopher;
 while (Philosopher->GetState() != psDie) {
-// code
+// call methods
 }
 delete Philosopher.
+
+The structure of the program:
+In the program, for each of the five philosophers, create an object of the philosopher class and a thread that describes the philosopher's routine. The philosopher's methods Eat (for the philosopher to eat) and Think (for the philosopher to think) must be called sequentially in the thread (one after another). In addition, it is necessary to exclude the possibility of simultaneous use of forks and to exclude the possibility of mutual blocking. To be able to display the states of the philosophers on the window, the philosopher object will send a WM_PHOLOSOPHER message to the main window with the id number of the philosopher (wParam) and the address of the philosopher object (lParam) whenever its state changes. The main form should update the specified philosopher on the screen in response to these notifications - IDC_WISDOM1/2/3/4/5, IDC_STATE1/2/3/4/5, IDC_FORCE1/2/3/4/5
+
+Task: Declare global variables:
+Declare variable to hold philosopher objects and semaphores.
+1) An array of philosopher class dynamic objects
+2) An array of fork semaphore handles
+3) Dining room semaphore handle
+
+Task: Implement philosopher routine thread and make a thread for each of the five philosophers
+1) Read the philosopher ID number from the wParam;
+2) In the main loop, while the philosopher with the provided ID number GetState() != psDie;
+a) Call Think();
+b) Check the dining room semaphore and enter the dining room;
+c) Check the fork semaphore with the ID number and take the left fork;
+d) Check the fork semaphore with the number ((id+1)%5) and take the right fork;
+e) Call Eat();
+f) Put down the right fork (release the fork semaphore with the number (id+1)%5);
+g) Put down the left fork (release the fork semaphore with id number);
+h) Leave the dining room (release the dining room semaphore).
 */
