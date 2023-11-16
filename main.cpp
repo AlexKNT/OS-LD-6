@@ -342,6 +342,8 @@ Task: Implement WM_PHILOSOPHER message
 2) If the philosopher object exists (the pointer in the array is not equal to NULL), read the philosopher's state, force and wisdom from it and output them to the respective fields on the screen (IDC_STATE1/2/3/4/5, IDC_FORCE1/2/3/4/5, IDC_WISDOM1/2/3/4/5)
 3) If the philosopher object does not exist (the pointer in the array is equal to NULL), clear the relevant fields on the screen. Set them to "". (IDC_STATE1/2/3/4/5, IDC_FORCE1/2/3/4/5, IDC_WISDOM1/2/3/4/5)
 
+During simulation, change the philosopher's color depending of the state of the philosopher. If Die - Red. If Eat - Green. If Think - Blue. To do this, handle WM_CTCOLORSTATIC. When processing WM_CTCOLORSTATIC message, use SetTextColor. Use lParam and GetDlgCtrlID to find which object is sending the message by converting its handle to ID.
+
 Use the following WINAPI functions:
 CreateSemaphore
 ReleaseSemaphore
