@@ -312,4 +312,22 @@ e) Call Eat();
 f) Put down the right fork (release the fork semaphore with the number (id+1)%5);
 g) Put down the left fork (release the fork semaphore with id number);
 h) Leave the dining room (release the dining room semaphore).
+
+Task: Implement WM_INITDIALOG message
+
+Task: Implement WM_DESTROY message
+
+Task: Implement switch (LOWORD(wParam)) IDC_START case
+
+Task: Implement switch (LOWORD(wParam)) IDC_STOP case
+
+Task: Implement WM_PHILOSOPHER message
+
+Use the following WINAPI functions:
+CreateSemaphore
+ReleaseSemaphore
+CreateMutex
+ReleaseMutex
+WaitForSingleObject
+WaitForMultipleObjects
 */
