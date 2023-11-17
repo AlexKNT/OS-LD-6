@@ -4,6 +4,9 @@
 #include "resource.h"
 #include "Philosopher.h"
 #include <commctrl.h>
+#include <queue>
+#include <mutex>
+
 #pragma warning(disable : 4996)
 
 constexpr int MAX_PHILOSOPHERS = 5;
@@ -13,14 +16,17 @@ HANDLE DiningRoomSemaphore;
 
 HINSTANCE g_hInstance;
 
+std::queue<int> DiningRoomQueue;
+std::mutex QueueMutex;
+
+
 BOOL CALLBACK VoracityDialogProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam);
 
 void InitGlobals() {
-    for (int i = 0; i < MAX_PHILOSOPHERS; ++i) {
-        Philosophers[i] = nullptr;
+    for (int i = 0; i < 5; ++i) {
         Forks[i] = CreateSemaphore(NULL, 1, 1, NULL);
     }
-    DiningRoomSemaphore = CreateSemaphore(NULL, MAX_PHILOSOPHERS - 1, MAX_PHILOSOPHERS - 1, NULL);
+    DiningRoomSemaphore = CreateSemaphore(NULL, 4, 4, NULL);
 }
 
 void CleanUpGlobals() {
@@ -41,6 +47,11 @@ DWORD WINAPI PhilosopherRoutine(void* param) {
     while (philosopher->GetState() != psDie) {
         philosopher->Think();
 
+        {
+            std::lock_guard<std::mutex> lock(QueueMutex);
+            DiningRoomQueue.push(id);
+        }
+
         WaitForSingleObject(DiningRoomSemaphore, INFINITE);
         WaitForSingleObject(Forks[id], INFINITE);
         WaitForSingleObject(Forks[(id + 1) % MAX_PHILOSOPHERS], INFINITE);
@@ -49,6 +60,12 @@ DWORD WINAPI PhilosopherRoutine(void* param) {
 
         ReleaseSemaphore(Forks[(id + 1) % MAX_PHILOSOPHERS], 1, NULL);
         ReleaseSemaphore(Forks[id], 1, NULL);
+        
+        {
+            std::lock_guard<std::mutex> lock(QueueMutex);
+            DiningRoomQueue.pop();
+        }
+
         ReleaseSemaphore(DiningRoomSemaphore, 1, NULL);
     }
 
@@ -56,68 +73,6 @@ DWORD WINAPI PhilosopherRoutine(void* param) {
 }
 
 const char* StateNames[] = { "Idle", "Think", "Eat", "Die" };
-void UpdateUIForPhilosopher(HWND hWnd, int philosopherID, TPhilosopher* philosopher) {
-    if (philosopher) {
-        const char* stateName = StateNames[philosopher->GetState()];
-        switch (philosopherID) {
-        case 0:
-            SetDlgItemText(hWnd, IDC_STATE1, stateName);
-            SetDlgItemInt(hWnd, IDC_FORCE1, philosopher->GetForce(), TRUE);
-            SetDlgItemText(hWnd, IDC_WISDOM1, std::to_string(philosopher->GetWisdom()).c_str());
-            break;
-        case 1:
-            SetDlgItemText(hWnd, IDC_STATE2, stateName);
-            SetDlgItemInt(hWnd, IDC_FORCE2, philosopher->GetForce(), TRUE);
-            SetDlgItemText(hWnd, IDC_WISDOM2, std::to_string(philosopher->GetWisdom()).c_str());
-            break;
-        case 2:
-            SetDlgItemText(hWnd, IDC_STATE3, stateName);
-            SetDlgItemInt(hWnd, IDC_FORCE3, philosopher->GetForce(), TRUE);
-            SetDlgItemText(hWnd, IDC_WISDOM3, std::to_string(philosopher->GetWisdom()).c_str());
-            break;
-        case 3:
-            SetDlgItemText(hWnd, IDC_STATE4, stateName);
-            SetDlgItemInt(hWnd, IDC_FORCE4, philosopher->GetForce(), TRUE);
-            SetDlgItemText(hWnd, IDC_WISDOM4, std::to_string(philosopher->GetWisdom()).c_str());
-            break;
-        case 4:
-            SetDlgItemText(hWnd, IDC_STATE5, stateName);
-            SetDlgItemInt(hWnd, IDC_FORCE5, philosopher->GetForce(), TRUE);
-            SetDlgItemText(hWnd, IDC_WISDOM5, std::to_string(philosopher->GetWisdom()).c_str());
-            break;
-        }
-    }
-    else {
-        // Clear UI elements related to the philosopher with ID
-        switch (philosopherID) {
-        case 0:
-            SetDlgItemText(hWnd, IDC_STATE1, "");
-            SetDlgItemText(hWnd, IDC_FORCE1, "");
-            SetDlgItemText(hWnd, IDC_WISDOM1, "");
-            break;
-        case 1:
-            SetDlgItemText(hWnd, IDC_STATE2, "");
-            SetDlgItemText(hWnd, IDC_FORCE2, "");
-            SetDlgItemText(hWnd, IDC_WISDOM2, "");
-            break;
-        case 2:
-            SetDlgItemText(hWnd, IDC_STATE3, "");
-            SetDlgItemText(hWnd, IDC_FORCE3, "");
-            SetDlgItemText(hWnd, IDC_WISDOM3, "");
-            break;
-        case 3:
-            SetDlgItemText(hWnd, IDC_STATE4, "");
-            SetDlgItemText(hWnd, IDC_FORCE4, "");
-            SetDlgItemText(hWnd, IDC_WISDOM4, "");
-            break;
-        case 4:
-            SetDlgItemText(hWnd, IDC_STATE5, "");
-            SetDlgItemText(hWnd, IDC_FORCE5, "");
-            SetDlgItemText(hWnd, IDC_WISDOM5, "");
-            break;
-        }
-    }
-}
 
 // Ziņojumu apstrādātāja prototips
 BOOL CALLBACK MainWndProc(HWND, UINT, WPARAM, LPARAM);
@@ -144,13 +99,11 @@ BOOL CALLBACK MainWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
         return TRUE;
     case WM_COMMAND: // ja tas ir paziņojums no vadības elementa
         switch (LOWORD(wParam)) { // pārbaudīt vadības elementa ID
-        case IDOK: // ja bija uzspiesta OK poga
-            DestroyWindow(hWnd); // aizvērt logu
-            return TRUE;
         case IDC_START:
             for (int i = 0; i < MAX_PHILOSOPHERS; ++i) {
                 Philosophers[i] = new TPhilosopher;
-                CreateThread(NULL, 0, PhilosopherRoutine, reinterpret_cast<void*>(i), 0, NULL);
+                HANDLE h = CreateThread(NULL, 0, PhilosopherRoutine, reinterpret_cast<void*>(i), 0, NULL);
+                CloseHandle(h);
             }
             EnableWindow(GetDlgItem(hWnd, IDC_START), FALSE);
             EnableWindow(GetDlgItem(hWnd, IDC_STOP), TRUE);
@@ -176,19 +129,84 @@ BOOL CALLBACK MainWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
             );
             return TRUE;
         case IDC_EXIT:
-            SendMessage(hWnd, WM_CLOSE, 0, 0);
+            CleanUpGlobals();
+            PostQuitMessage(0); // pabeigt programmu
             return TRUE;
         }
         return FALSE;
 
     int id;
-    TPhilosopher* philosopher;
+    TPhilosopher* phil;
     case WM_PHILOSOPHER:
-        id = static_cast<int>(wParam);
-        philosopher = reinterpret_cast<TPhilosopher*>(lParam);
+    {
+        int id = static_cast<int>(wParam);
 
-        if (Philosophers[id] == philosopher) UpdateUIForPhilosopher(hWnd, id, philosopher);
+        if (Philosophers[id]) {
+            phil = Philosophers[id];
+
+            const char* stateName = StateNames[phil->GetState()];
+
+            switch (id) {
+            case 0:
+                SetDlgItemText(hWnd, IDC_STATE1, stateName);
+                SetDlgItemInt(hWnd, IDC_FORCE1, phil->GetForce(), TRUE);
+                SetDlgItemText(hWnd, IDC_WISDOM1, std::to_string(phil->GetWisdom()).c_str());
+                break;
+            case 1:
+                SetDlgItemText(hWnd, IDC_STATE2, stateName);
+                SetDlgItemInt(hWnd, IDC_FORCE2, phil->GetForce(), TRUE);
+                SetDlgItemText(hWnd, IDC_WISDOM2, std::to_string(phil->GetWisdom()).c_str());
+                break;
+            case 2:
+                SetDlgItemText(hWnd, IDC_STATE3, stateName);
+                SetDlgItemInt(hWnd, IDC_FORCE3, phil->GetForce(), TRUE);
+                SetDlgItemText(hWnd, IDC_WISDOM3, std::to_string(phil->GetWisdom()).c_str());
+                break;
+            case 3:
+                SetDlgItemText(hWnd, IDC_STATE4, stateName);
+                SetDlgItemInt(hWnd, IDC_FORCE4, phil->GetForce(), TRUE);
+                SetDlgItemText(hWnd, IDC_WISDOM4, std::to_string(phil->GetWisdom()).c_str());
+                break;
+            case 4:
+                SetDlgItemText(hWnd, IDC_STATE5, stateName);
+                SetDlgItemInt(hWnd, IDC_FORCE5, phil->GetForce(), TRUE);
+                SetDlgItemText(hWnd, IDC_WISDOM5, std::to_string(phil->GetWisdom()).c_str());
+                break;
+            }
+        }
+        else {
+            // Clear UI elements related to the philosopher with ID
+            switch (id) {
+            case 0:
+                SetDlgItemText(hWnd, IDC_STATE1, "");
+                SetDlgItemText(hWnd, IDC_FORCE1, "");
+                SetDlgItemText(hWnd, IDC_WISDOM1, "");
+                break;
+            case 1:
+                SetDlgItemText(hWnd, IDC_STATE2, "");
+                SetDlgItemText(hWnd, IDC_FORCE2, "");
+                SetDlgItemText(hWnd, IDC_WISDOM2, "");
+                break;
+            case 2:
+                SetDlgItemText(hWnd, IDC_STATE3, "");
+                SetDlgItemText(hWnd, IDC_FORCE3, "");
+                SetDlgItemText(hWnd, IDC_WISDOM3, "");
+                break;
+            case 3:
+                SetDlgItemText(hWnd, IDC_STATE4, "");
+                SetDlgItemText(hWnd, IDC_FORCE4, "");
+                SetDlgItemText(hWnd, IDC_WISDOM4, "");
+                break;
+            case 4:
+                SetDlgItemText(hWnd, IDC_STATE5, "");
+                SetDlgItemText(hWnd, IDC_FORCE5, "");
+                SetDlgItemText(hWnd, IDC_WISDOM5, "");
+                break;
+            }
+        }
         return TRUE;
+    }
+
 
     case WM_DESTROY: // ja tas ir pabeigšanas pieprasījums
         CleanUpGlobals();
