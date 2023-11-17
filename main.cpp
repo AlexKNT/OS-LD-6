@@ -3,12 +3,17 @@
 #include <stdio.h>
 #include "resource.h"
 #include "Philosopher.h"
+#include <commctrl.h>
 #pragma warning(disable : 4996)
 
 constexpr int MAX_PHILOSOPHERS = 5;
 TPhilosopher* Philosophers[MAX_PHILOSOPHERS] = { nullptr, nullptr, nullptr, nullptr, nullptr };
 HANDLE Forks[MAX_PHILOSOPHERS];
 HANDLE DiningRoomSemaphore;
+
+HINSTANCE g_hInstance;
+
+BOOL CALLBACK VoracityDialogProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam);
 
 void InitGlobals() {
     for (int i = 0; i < MAX_PHILOSOPHERS; ++i) {
@@ -114,13 +119,14 @@ void UpdateUIForPhilosopher(HWND hWnd, int philosopherID, TPhilosopher* philosop
     }
 }
 
-
-
 // Ziņojumu apstrādātāja prototips
 BOOL CALLBACK MainWndProc(HWND, UINT, WPARAM, LPARAM);
+
 // Galvenā funkcija
 // ja galvenā loga šablonam ir piešķirts resursa identifikators IDD_MAINDIALOG
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
+    g_hInstance = hInstance;
+
     DialogBox(
         hInstance,
         MAKEINTRESOURCE(IDD_MAINDIALOG),
@@ -161,6 +167,14 @@ BOOL CALLBACK MainWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
             EnableWindow(GetDlgItem(hWnd, IDC_START), TRUE);
             EnableWindow(GetDlgItem(hWnd, IDC_STOP), FALSE);
             return TRUE;
+        case IDC_VORACITY:
+            DialogBox(
+                g_hInstance,
+                MAKEINTRESOURCE(IDD_VORACITYDIALOG),
+                hWnd,
+                DLGPROC(VoracityDialogProc)
+            );
+            return TRUE;
         case IDC_EXIT:
             SendMessage(hWnd, WM_CLOSE, 0, 0);
             return TRUE;
@@ -184,11 +198,56 @@ BOOL CALLBACK MainWndProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
     return FALSE;
 }
 
+
+BOOL CALLBACK VoracityDialogProc(HWND hDlg, UINT Msg, WPARAM wParam, LPARAM lParam) {
+    static HWND hTrackbar;
+    int initialVoracity;
+    int newVoracity;
+    switch (Msg) {
+    case WM_INITDIALOG:
+        // Create the Trackbar control and set its range
+        hTrackbar = GetDlgItem(hDlg, IDC_VORE);
+        SendMessage(hTrackbar, TBM_SETRANGE, TRUE, MAKELONG(0, 100));
+
+        // Read the voracity from the first philosopher and set it to IDC_VORE
+        if (Philosophers[0]) {
+            initialVoracity = Philosophers[0]->GetVoracity();
+            SendMessage(hTrackbar, TBM_SETPOS, TRUE, initialVoracity);
+        }
+        
+        return TRUE;
+      
+    case WM_COMMAND:
+        switch (LOWORD(wParam)) {
+        case IDC_SETVORE:
+            // Get the new voracity value from the slider
+            newVoracity = SendMessage(hTrackbar, TBM_GETPOS, 0, 0);
+
+            // Set the new voracity for each philosopher
+            for (int i = 0; i < MAX_PHILOSOPHERS; ++i) {
+                if (Philosophers[i]) {
+                    Philosophers[i]->SetVoracity(newVoracity);
+                }
+            }
+
+            EndDialog(hDlg, 0);
+            return TRUE;
+        }
+        break;
+
+    case WM_CLOSE:
+        EndDialog(hDlg, 0);
+        return TRUE;
+    }
+    return FALSE;
+}
+
 /*
 This is a C++ WINAPI program that solves the dining philosophers problem.
 
 resource.h contains:
-Dialog IDD_MAINDIALOG, Button IDC_START, Button IDC_STOP, Button IDC_EXIT, Static Text IDC_WISDOM1, Static Text IDC_WISDOM2, Static Text IDC_WISDOM3, Static Text IDC_WISDOM4, Static Text IDC_WISDOM5, Static Text IDC_FORCE1, Static Text IDC_FORCE2, Static Text IDC_FORCE3, Static Text IDC_FORCE4, Static Text IDC_FORCE5, Static Text IDC_STATE1, Static Text IDC_STATE2, Static Text IDC_STATE3, Static Text IDC_STATE4, Static Text IDC_STATE5
+Dialog IDD_MAINDIALOG, Button IDC_START, Button IDC_VORACITY Button IDC_STOP, Button IDC_EXIT, Static Text IDC_WISDOM1, Static Text IDC_WISDOM2, Static Text IDC_WISDOM3, Static Text IDC_WISDOM4, Static Text IDC_WISDOM5, Static Text IDC_FORCE1, Static Text IDC_FORCE2, Static Text IDC_FORCE3, Static Text IDC_FORCE4, Static Text IDC_FORCE5, Static Text IDC_STATE1, Static Text IDC_STATE2, Static Text IDC_STATE3, Static Text IDC_STATE4, Static Text IDC_STATE5,
+Dialog IDD_VORACITYDIALOG with Slider Control IDC_VORE and a Button IDC_SETVORE
 */
 
 /*
@@ -420,9 +479,9 @@ bool TPhilosopher::SetVoracity(int AVoracity)
     LeaveCriticalSection(&CPhilosopher);
     return true;
 }
+*/
 
-
-
+/*
 Use the following code template:
 TPhilosopher * Philosopher = new TPhilosopher;
 while (Philosopher->GetState() != psDie) {
